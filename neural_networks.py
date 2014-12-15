@@ -384,22 +384,21 @@ class NeuralNetwork():
         will_mutate, node_random, iter_random = self._random_pool(reps,
                                                         nmutants, mutate_prob)
 
-
-        #==============================================================================
+#==============================================================================
 #         @numba.jit(void(u2,f8,u2,f8,u2,u2,
 #         f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
 #         f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
 #         b1[:,:,:],f8[:,:,:,:],f8[:,:]),
 #         nopython=True)
 #==============================================================================
-        make_fit(reps=reps, eta=eta, nmutants=nmutants, 
-                 mutate_prob=mutate_prob, l=l, cv_l=cv_l, params=params,
-                 best_params=best_params, best_cv = best_cv,
-                 mutparams=mutparams, X=X, Y=Y, covariance=covariance, 
-                 cv_X=cv_X, cv_Y=cv_Y, cv_cov= cv_cov, 
-                 chi2=chi2, cv_chi2=cv_chi2,
-                 will_mutate=will_mutate, node_random=node_random,
-                 iter_random=iter_random,)
+        make_fit(reps, eta, nmutants, 
+                 mutate_prob, l, cv_l, params,
+                 best_params, best_cv,
+                 mutparams, X, Y, covariance, 
+                 cv_X, cv_Y, cv_cov, 
+                 chi2, cv_chi2,
+                 will_mutate, node_random,
+                 iter_random,)
 
         self._set_params(best_cv)
         fit_result = {}
