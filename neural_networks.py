@@ -11,10 +11,9 @@ from itertools import chain, repeat
 import numpy as np
 import sympy
 import numba
-from numba import types
 
 
-from utils import NeuralPrinter, memcopy
+from nnets.utils import NeuralPrinter, memcopy
 
 
 def sigmoid_g(a):
