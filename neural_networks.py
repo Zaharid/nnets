@@ -11,6 +11,7 @@ from itertools import chain, repeat
 import numpy as np
 import sympy
 import numba
+from numba.types import void, u2, b1, f8
 
 
 from nnets.utils import NeuralPrinter, memcopy, cv_split
@@ -232,7 +233,7 @@ class NeuralNetwork():
                 y = Y[i]
                 cov = covariance[i]
                 chi2 += (func(x, params) - y)**2 / cov
-            return chi2
+            return chi2/l
 
         return chi2_func
 
@@ -319,16 +320,14 @@ class NeuralNetwork():
         nnodes = len(list(self._node_indexes))
 
 
-#==============================================================================
-#         @numba.jit('void(u2,f8,u2,f8,u2,u2,'
-#         'f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],'
-#         'f8[:],f8[:],f8[:],f8[:],f8[:],'
-#         'b1[:,:,:],f8[:,:,:,:],f8[:,:])',
-#         nopython=True)
-#==============================================================================
+        @numba.jit(void(u2,f8,u2,f8,u2,u2,
+        f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
+        f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
+        b1[:,:,:],f8[:,:,:,:],f8[:,:]),
+        nopython=True)
         def make_fit(reps, eta, nmutants, mutate_prob, l, cv_l,
                      params, best_params, best_cv,  mutparams, X, Y, 
-                     covariance, cv_X, cv_Y, cv_cov, chi2, 
+                     covariance, cv_X, cv_Y, cv_cov, chi2, cv_chi2,
                      will_mutate, node_random, iter_random):
 
             starting_f = func(params, l, X, Y, covariance)
@@ -344,12 +343,17 @@ class NeuralNetwork():
 
                     new_f = func(mutparams, l, X, Y, covariance)
                     new_cv = func(mutparams, cv_l, cv_X, cv_Y, cv_cov)
-                    if new_cv < starting_cv:
-                        memcopy(best_cv, mutparams, nparams)
+                    
+                    
                     if new_f < starting_f:
                         memcopy(best_params, mutparams , nparams)
                         starting_f = new_f
+                    if new_cv < starting_cv:
+                        memcopy(best_cv, mutparams, nparams)
+                        starting_cv = new_cv
+                        
                     chi2[rep] = starting_f
+                    cv_chi2[rep] =  starting_cv
                 memcopy(params, best_params, nparams)
 
         return make_fit
@@ -369,6 +373,7 @@ class NeuralNetwork():
         best_cv = np.zeros(nparams)
         mutparams = np.zeros(nparams)
         chi2 = np.zeros(reps)
+        cv_chi2 = np.zeros(reps)
 
 
         make_fit = self._get_genetic_fit_function(target,mutate_func)
@@ -380,16 +385,35 @@ class NeuralNetwork():
                                                         nmutants, mutate_prob)
 
 
+        #==============================================================================
+#         @numba.jit(void(u2,f8,u2,f8,u2,u2,
+#         f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
+#         f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
+#         b1[:,:,:],f8[:,:,:,:],f8[:,:]),
+#         nopython=True)
+#==============================================================================
         make_fit(reps=reps, eta=eta, nmutants=nmutants, 
                  mutate_prob=mutate_prob, l=l, cv_l=cv_l, params=params,
                  best_params=best_params, best_cv = best_cv,
                  mutparams=mutparams, X=X, Y=Y, covariance=covariance, 
                  cv_X=cv_X, cv_Y=cv_Y, cv_cov= cv_cov, 
-                 chi2=chi2, will_mutate=will_mutate, node_random=node_random,
+                 chi2=chi2, cv_chi2=cv_chi2,
+                 will_mutate=will_mutate, node_random=node_random,
                  iter_random=iter_random,)
 
         self._set_params(best_cv)
-        return chi2
+        fit_result = {}
+        fit_result['X_train'] = X
+        fit_result['X_test'] = cv_X
+        fit_result['Y_train'] = Y
+        fit_result['Y_test'] = cv_Y
+        fit_result['cov_train'] = covariance
+        fit_result['cov_test'] = cv_cov
+        fit_result['best_cv'] = best_cv
+        fit_result['best_chi2'] = best_params
+        fit_result['chi2'] = chi2
+        fit_result['cv_chi2'] = cv_chi2
+        return fit_result
 
     def __call__(self, x):
         if self.unidimentional_output:
@@ -418,6 +442,3 @@ class NeuralNetwork():
     def net_nodes(self):
         yield from self.hidden_nodes
         yield from self.output_nodes
-
-
-
