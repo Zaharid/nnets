@@ -13,7 +13,7 @@ import sympy
 import numba
 
 
-from nnets.utils import NeuralPrinter, memcopy
+from nnets.utils import NeuralPrinter, memcopy, cv_split
 
 
 def sigmoid_g(a):
@@ -89,7 +89,7 @@ class NeuralNetwork():
 
     def __init__(self):
         self._init_parmams()
-    
+
     _output_formulas = None
     _params = None
     _evaluate_sync = True
@@ -98,7 +98,7 @@ class NeuralNetwork():
     @property
     def unidimentional_output(self):
         return len(list(self.output_nodes)) == 1
-    
+
     @property
     def total_output_formulas(self):
         if self._output_formulas is None:
@@ -129,7 +129,7 @@ class NeuralNetwork():
         """Return compiled functions with fixed network parameters"""
         if self._ev_fs and self._evaluate_sync:
             return self._ev_fs
-        
+
         ev_fs = []
         param_symbols = self.parameter_symbols
         param_values = self.parameter_values
@@ -142,7 +142,7 @@ class NeuralNetwork():
             signature = 'float64(%s)' % ','.join(repeat('float64',input_len))
 
             ev_fs.append(numba.vectorize(signature)(func))
-        
+
         self._evaluate_sync = True
         self._ev_fs = ev_fs
         return ev_fs
@@ -150,43 +150,43 @@ class NeuralNetwork():
     def get_evaluate_function(self):
         """Return only the first function (to avoid typing zero every time)"""
         return self.get_evaluate_functions()[0]
-    
+
     def _get_params(self):
          for node in chain(self.hidden_nodes, self.output_nodes):
              yield from node.weights
              yield node.theta
-    
 
-             
+
+
     @property
     def _node_indexes(self):
         i = 0
         for node in chain(self.hidden_nodes, self.output_nodes):
             yield i
             i += len(node.weights) + 1
-    
+
     @property
     def parameters(self):
         return self._params
-            
-    
+
+
     def _init_parmams(self):
         #Initialize params
         nparams = len(list(self.parameter_symbols))
         params = np.random.normal(size=nparams)
         self._set_params(params)
-    
+
     def reset_params(self):
         self._init_parmams()
-    
+
     def save_params(self, file):
         np.save(file, self._params)
-    
+
     def load_params(self, file):
         params = np.load(file)
         self._set_params(params)
-    
-    
+
+
 
     def _set_params(self, params):
         """Set network parameters where `params` is
@@ -213,17 +213,17 @@ class NeuralNetwork():
             signature = 'float64(float64,float64[:])'
             params = sympy.Symbol('params')
             printer = NeuralPrinter('params', param_symbols)
-            func = sympy.lambdify(input_symbols + [params], f, 
+            func = sympy.lambdify(input_symbols + [params], f,
                                   printer = printer, dummify = False)
             p_fs.append(numba.jit(signature, nopython=True)(func))
         return p_fs
-    
-    #TODO make multidimensional    
+
+    #TODO make multidimensional
     #TODO real covariance
     def _get_chi2_func(self):
-        
-        func = self.input_param_functions()[0]  
-        
+
+        func = self.input_param_functions()[0]
+
         @numba.jit('f8(f8[:],u2,f8[:],f8[:],f8[:])', nopython = True)
         def chi2_func(params, l, X, Y, covariance):
             chi2 = 0
@@ -233,11 +233,11 @@ class NeuralNetwork():
                 cov = covariance[i]
                 chi2 += (func(x, params) - y)**2 / cov
             return chi2
-        
+
         return chi2_func
-    
+
     def _get_genetic_mutate_function_orig(self):
-        
+
         indexes = np.fromiter(self._node_indexes, dtype=np.int)
         nnodes = len(indexes)
         nparams = len(self.parameters)
@@ -255,12 +255,12 @@ class NeuralNetwork():
             for i in range(frm, to):
                 rd = node_random[rep,mutant, node, i - frm]
                 params[i] += const*rd
-                
-                
+
+
         return mutate
 
     def _get_genetic_mutate_function_mutate(self):
-        
+
         indexes = np.fromiter(self._node_indexes, dtype=np.int)
         nnodes = len(indexes)
         nparams = len(self.parameters)
@@ -278,10 +278,10 @@ class NeuralNetwork():
             for i in range(frm, to):
                 rd = node_random[rep,mutant, node, i - frm]
                 params[i] += const*rd
-                
-                
+
+
         return mutate
-    
+
     def _random_pool(self, reps, nmutants, mutate_prob):
         indexes = np.fromiter(self._node_indexes, dtype=np.int)
         nnodes = len(indexes)
@@ -292,41 +292,47 @@ class NeuralNetwork():
         #total_mutants = np.sum(will_mutate)
         node_random = np.random.uniform(-1, 1,
                                 size=(reps, nmutants, nnodes, max_nweights))
-        
+
         iter_random = np.random.rand(reps, nmutants)
-        
+
         return will_mutate,node_random,iter_random
-    
+
     @functools.lru_cache()
-    def _get_genetic_fit_function(self, target, mutate_func):
+    def _get_genetic_fit_function(self, target='chi2_func', 
+                                  mutate_func='original'):
 
 
         if target == 'chi2_func':
             func = self._get_chi2_func()
         else:
             func = target()
-        
+
         if mutate_func == 'original':
             mutate = self._get_genetic_mutate_function_orig()
         elif mutate_func == 'chiweights':
              mutate = self._get_genetic_mutate_function_chi2()
         else:
             mutate = mutate_func()
-        
+
         nparams = len(list(self.parameter_symbols))
 
         nnodes = len(list(self._node_indexes))
-        
-        
-        @numba.jit('void(f8,f8,u2,u2,f8,'
-        'f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],b1[:,:,:]'
-        ',f8[:,:,:,:],f8[:,:])', 
-        nopython=True)
-        def make_fit(reps, eta, nmutants, mutate_prob, l, params, 
-                     best_params,  mutparams, X, Y, covariance, chi2,
+
+
+#==============================================================================
+#         @numba.jit('void(u2,f8,u2,f8,u2,u2,'
+#         'f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],'
+#         'f8[:],f8[:],f8[:],f8[:],f8[:],'
+#         'b1[:,:,:],f8[:,:,:,:],f8[:,:])',
+#         nopython=True)
+#==============================================================================
+        def make_fit(reps, eta, nmutants, mutate_prob, l, cv_l,
+                     params, best_params, best_cv,  mutparams, X, Y, 
+                     covariance, cv_X, cv_Y, cv_cov, chi2, 
                      will_mutate, node_random, iter_random):
-                     
+
             starting_f = func(params, l, X, Y, covariance)
+            starting_cv = func(mutparams, cv_l, cv_X, cv_Y, cv_cov)
             memcopy(best_params, params, nparams)
             for rep in range(reps):
                 for mutant in range(nmutants):
@@ -337,50 +343,60 @@ class NeuralNetwork():
                                    starting_f, node_random, iter_random)
 
                     new_f = func(mutparams, l, X, Y, covariance)
-                    
+                    new_cv = func(mutparams, cv_l, cv_X, cv_Y, cv_cov)
+                    if new_cv < starting_cv:
+                        memcopy(best_cv, mutparams, nparams)
                     if new_f < starting_f:
                         memcopy(best_params, mutparams , nparams)
                         starting_f = new_f
                     chi2[rep] = starting_f
                 memcopy(params, best_params, nparams)
-        
+
         return make_fit
-        
-        
-    def genetic_fit(self, X, Y, covariance = None, target = 'chi2_func', 
+
+
+    def genetic_fit(self, X, Y, covariance = None, target = 'chi2_func',
                     mutate_func = 'original',
-                    reps = 10000, eta = 15, nmutants = 80, mutate_prob = 0.2):
-        
+                    reps = 10000, eta = 15, nmutants = 80, mutate_prob = 0.2, 
+                    prob_testing = 0.3):
+
         if covariance is None:
             covariance = np.ones_like(Y)
-        
+
         params = np.array(self.parameters, dtype=np.float64)
         nparams = len(params)
         best_params = np.zeros(nparams)
+        best_cv = np.zeros(nparams)
         mutparams = np.zeros(nparams)
         chi2 = np.zeros(reps)
-        
-        
+
+
         make_fit = self._get_genetic_fit_function(target,mutate_func)
+        ((X, cv_X),(Y,cv_Y), (covariance, cv_cov)) = cv_split(X, Y, covariance,
+                prob_testing = prob_testing)     
         
-        l = len(X)
-        will_mutate, node_random, iter_random = self._random_pool(reps, 
+        l,cv_l = len(X), len(cv_X)
+        will_mutate, node_random, iter_random = self._random_pool(reps,
                                                         nmutants, mutate_prob)
-        
-        
-        make_fit(reps, eta, nmutants, mutate_prob, l, params, best_params, 
-                 mutparams, X, Y, covariance, chi2, will_mutate, node_random, 
-                 iter_random)
-                 
-        self._set_params(params)
+
+
+        make_fit(reps=reps, eta=eta, nmutants=nmutants, 
+                 mutate_prob=mutate_prob, l=l, cv_l=cv_l, params=params,
+                 best_params=best_params, best_cv = best_cv,
+                 mutparams=mutparams, X=X, Y=Y, covariance=covariance, 
+                 cv_X=cv_X, cv_Y=cv_Y, cv_cov= cv_cov, 
+                 chi2=chi2, will_mutate=will_mutate, node_random=node_random,
+                 iter_random=iter_random,)
+
+        self._set_params(best_cv)
         return chi2
-    
+
     def __call__(self, x):
         if self.unidimentional_output:
             return self.get_evaluate_function()(x)
         else:
             return [f(x) for f in self.get_evaluate_functions()]
-    
+
     @property
     def input_nodes(self):
         raise NotImplementedError()
@@ -397,11 +413,11 @@ class NeuralNetwork():
     @property
     def hidden_nodes(self):
         raise NotImplementedError()
-    
+
     @property
     def net_nodes(self):
         yield from self.hidden_nodes
         yield from self.output_nodes
-        
+
 
 

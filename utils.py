@@ -42,10 +42,9 @@ class NeuralPrinter(ArraySubstitutionPrinter, ReplaceComaPrinter):
 
 
 
-def cv_split(replica, prob_testing = 0.3, even_splits = None):
+def cv_split(*arrs, prob_testing = 0.3, even_splits = None):
     if even_splits is not None:
         raise NotImplementedError
-    is_validation = np.random.rand(*replica.shape) < prob_testing
-    test = replica[is_validation]
-    train = replica[~is_validation]
-    return train, test
+    is_validation = np.random.rand(*arrs[0].shape) < prob_testing
+    
+    return ((arr[~is_validation],arr[is_validation]) for arr in arrs)
