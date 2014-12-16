@@ -260,7 +260,7 @@ class NeuralNetwork():
 
         return mutate
 
-    def _get_genetic_mutate_function_mutate(self):
+    def _get_genetic_mutate_function_chi2(self):
 
         indexes = np.fromiter(self._node_indexes, dtype=np.int)
         nnodes = len(indexes)
