@@ -244,8 +244,8 @@ class NeuralNetwork():
         nparams = len(self.parameters)
 
 
-        @numba.jit('void(f8[:],u2,u2,u2,f8,f8,f8[:,:,:,:],f8[:,:])', nopython = True)
-        def mutate(params, rep, mutant, node, eta, chi2, node_random, iter_random):
+        @numba.jit('void(f8[:],u2,u2,u2,u2,f8,f8,f8[:,:,:,:],f8[:,:])', nopython = True)
+        def mutate(params, rep, mutant, node, mutindex, eta, chi2, node_random, iter_random):
             frm = indexes[node]
             if node == nnodes - 1:
                 to = nparams
@@ -254,7 +254,7 @@ class NeuralNetwork():
             rite = iter_random[rep, mutant]
             const = eta/(rep + 1)**rite
             for i in range(frm, to):
-                rd = node_random[rep,mutant, node, i - frm]
+                rd = node_random[mutindex, i - frm]
                 params[i] += const*rd
 
 
@@ -288,11 +288,14 @@ class NeuralNetwork():
         nnodes = len(indexes)
         nparams = len(self.parameters)
         max_nweights = np.max([np.max(np.diff(indexes)), nparams - indexes[-1]])
+        
+        
         will_mutate = np.random.rand(reps, nmutants, nnodes) < mutate_prob
         #TODO: Use this to reduce size of pool
         #total_mutants = np.sum(will_mutate)
+        mutating_nodes = np.sum(will_mutate)
         node_random = np.random.uniform(-1, 1,
-                                size=(reps, nmutants, nnodes, max_nweights))
+                                size=(mutating_nodes, max_nweights))
 
         iter_random = np.random.rand(reps, nmutants)
 
@@ -323,7 +326,7 @@ class NeuralNetwork():
         @numba.jit(void(u2,f8,u2,f8,u2,u2,
         f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
         f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
-        b1[:,:,:],f8[:,:,:,:],f8[:,:]),
+        b1[:,:,:],f8[:,:],f8[:,:]),
         nopython=True)
         def make_fit(reps, eta, nmutants, mutate_prob, l, cv_l,
                      params, best_params, best_cv,  mutparams, X, Y, 
@@ -333,13 +336,15 @@ class NeuralNetwork():
             starting_f = func(params, l, X, Y, covariance)
             starting_cv = func(mutparams, cv_l, cv_X, cv_Y, cv_cov)
             memcopy(best_params, params, nparams)
+            mutindex = 0
             for rep in range(reps):
                 for mutant in range(nmutants):
                     memcopy(mutparams, params, nparams)
                     for node in range(nnodes):
                         if will_mutate[rep,mutant,node]:
-                            mutate(mutparams, rep, mutant, node, eta,
+                            mutate(mutparams, rep, mutant, node, mutindex, eta,
                                    starting_f, node_random, iter_random)
+                            mutindex += 1
 
                     new_f = func(mutparams, l, X, Y, covariance)
                     new_cv = func(mutparams, cv_l, cv_X, cv_Y, cv_cov)
