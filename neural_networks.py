@@ -244,7 +244,7 @@ class NeuralNetwork():
         nparams = len(self.parameters)
 
 
-        @numba.jit('void(f8[:],u2,u2,u2,u2,f8,f8,f8[:,:,:,:],f8[:,:])', nopython = True)
+        @numba.jit('void(f8[:],u2,u2,u2,u2,f8,f8,f8[:,:],f8[:,:])', nopython = True)
         def mutate(params, rep, mutant, node, mutindex, eta, chi2, node_random, iter_random):
             frm = indexes[node]
             if node == nnodes - 1:
