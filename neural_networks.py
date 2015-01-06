@@ -291,8 +291,6 @@ class NeuralNetwork():
         
         
         will_mutate = np.random.rand(reps, nmutants, nnodes) < mutate_prob
-        #TODO: Use this to reduce size of pool
-        #total_mutants = np.sum(will_mutate)
         mutating_nodes = np.sum(will_mutate)
         node_random = np.random.uniform(-1, 1,
                                 size=(mutating_nodes, max_nweights))
