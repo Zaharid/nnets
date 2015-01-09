@@ -369,6 +369,8 @@ class NeuralNetwork():
 
         if covariance is None:
             covariance = np.ones_like(Y)
+        elif np.isscalar(covariance):
+            covariance = np.tile(covariance, Y.shape)
 
         params = np.array(self.parameters, dtype=np.float64)
         nparams = len(params)
