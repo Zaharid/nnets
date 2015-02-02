@@ -265,17 +265,17 @@ class NeuralNetwork():
         indexes = np.fromiter(self._node_indexes, dtype=np.int)
         nnodes = len(indexes)
         nparams = len(self.parameters)
+        NORM = np.log(3)
 
-
-        @numba.jit('void(f8[:],u2,u2,u2,f8,f8,f8[:,:,:,:],f8[:,:])', nopython = True)
-        def mutate(params, rep, mutant, node, eta, chi2, node_random, iter_random):
+        @numba.jit('void(f8[:],u2,u2,u2,u2,f8,f8,f8[:,:],f8[:,:])', nopython = True)
+        def mutate(params, rep, mutant, node, mutindex, eta, chi2, node_random, iter_random):
             frm = indexes[node]
             if node == nnodes - 1:
                 to = nparams
             else:
                 to = indexes[node + 1]
             rite = iter_random[rep, mutant]
-            const = eta*((1 + (rep+1)*np.log10(1+chi2))/(rep + 1))**rite
+            const = eta*((1 + (rep+1)*(np.log(1+chi2)/NORM))/(rep + 1))**rite
             for i in range(frm, to):
                 rd = node_random[rep,mutant, node, i - frm]
                 params[i] += const*rd
