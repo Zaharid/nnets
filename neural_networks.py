@@ -277,7 +277,7 @@ class NeuralNetwork():
             rite = iter_random[rep, mutant]
             const = eta*((1 + (rep+1)*(np.log(1+chi2)/NORM))/(rep + 1))**rite
             for i in range(frm, to):
-                rd = node_random[rep,mutant, node, i - frm]
+                rd = node_random[mutindex, i - frm]
                 params[i] += const*rd
 
 
