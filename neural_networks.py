@@ -11,7 +11,6 @@ from itertools import chain, repeat
 import numpy as np
 import sympy
 import numba
-from numba.types import void, u2, b1, f8
 
 
 from nnets.utils import NeuralPrinter, memcopy, cv_split
@@ -211,12 +210,12 @@ class NeuralNetwork():
 
         for f in self.total_output_formulas:
             #TODO: multidimensional input
-            signature = 'float64(float64,float64[:])'
+            #signature = 'float64(float64,float64[:])'
             params = sympy.Symbol('params')
             printer = NeuralPrinter('params', param_symbols)
             func = sympy.lambdify(input_symbols + [params], f,
                                   printer = printer, dummify = False)
-            p_fs.append(numba.jit(signature, nopython=True)(func))
+            p_fs.append(numba.jit(nopython=True)(func))
         return p_fs
 
     #TODO make multidimensional
@@ -225,7 +224,7 @@ class NeuralNetwork():
 
         func = self.input_param_functions()[0]
 
-        @numba.jit('f8(f8[:],u2,f8[:],f8[:],f8[:])', nopython = True)
+        @numba.jit(nopython = True)
         def chi2_func(params, l, X, Y, covariance):
             chi2 = 0
             for i in range(l):
@@ -244,7 +243,7 @@ class NeuralNetwork():
         nparams = len(self.parameters)
 
 
-        @numba.jit('void(f8[:],u2,u2,u2,u2,f8,f8,f8[:,:],f8[:,:])', nopython = True)
+        @numba.jit(nopython = True)
         def mutate(params, rep, mutant, node, mutindex, eta, chi2, node_random, iter_random):
             frm = indexes[node]
             if node == nnodes - 1:
@@ -267,7 +266,7 @@ class NeuralNetwork():
         nparams = len(self.parameters)
         NORM = np.log(3)
 
-        @numba.jit('void(f8[:],u2,u2,u2,u2,f8,f8,f8[:,:],f8[:,:])', nopython = True)
+        @numba.jit(nopython = True)
         def mutate(params, rep, mutant, node, mutindex, eta, chi2, node_random, iter_random):
             frm = indexes[node]
             if node == nnodes - 1:
@@ -321,11 +320,7 @@ class NeuralNetwork():
         nnodes = len(list(self._node_indexes))
 
 
-        @numba.jit(void(u2,f8,u2,f8,u2,u2,
-        f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
-        f8[:],f8[:],f8[:],f8[:],f8[:],f8[:],
-        b1[:,:,:],f8[:,:],f8[:,:]),
-        nopython=True)
+        @numba.jit(nopython=True)
         def make_fit(reps, eta, nmutants, mutate_prob, l, cv_l,
                      params, best_params, best_cv,  mutparams, X, Y, 
                      covariance, cv_X, cv_Y, cv_cov, chi2, cv_chi2,
