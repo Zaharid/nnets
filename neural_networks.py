@@ -13,6 +13,7 @@ import sympy
 import numba
 
 
+
 from nnets.utils import NeuralPrinter, memcopy, cv_split
 
 
@@ -210,12 +211,12 @@ class NeuralNetwork():
 
         for f in self.total_output_formulas:
             #TODO: multidimensional input
-            #signature = 'float64(float64,float64[:])'
+            signature = 'float64(float64,float64[:])'
             params = sympy.Symbol('params')
             printer = NeuralPrinter('params', param_symbols)
             func = sympy.lambdify(input_symbols + [params], f,
                                   printer = printer, dummify = False)
-            p_fs.append(numba.jit(nopython=True)(func))
+            p_fs.append(numba.jit(signature, nopython=True)(func))
         return p_fs
 
     #TODO make multidimensional
@@ -224,7 +225,7 @@ class NeuralNetwork():
 
         func = self.input_param_functions()[0]
 
-        @numba.jit(nopython = True)
+        @numba.jit('f8(f8[:],u2,f8[:],f8[:],f8[:])', nopython = True)
         def chi2_func(params, l, X, Y, covariance):
             chi2 = 0
             for i in range(l):
@@ -250,7 +251,7 @@ class NeuralNetwork():
                 to = nparams
             else:
                 to = indexes[node + 1]
-            rite = iter_random[rep, mutant]
+            rite = iter_random[mutant]
             const = eta/(rep + 1)**rite
             for i in range(frm, to):
                 rd = node_random[mutindex, i - frm]
@@ -273,7 +274,7 @@ class NeuralNetwork():
                 to = nparams
             else:
                 to = indexes[node + 1]
-            rite = iter_random[rep, mutant]
+            rite = iter_random[mutant]
             const = eta*((1 + (rep+1)*(np.log(1+chi2)/NORM))/(rep + 1))**rite
             for i in range(frm, to):
                 rd = node_random[mutindex, i - frm]
@@ -282,24 +283,26 @@ class NeuralNetwork():
 
         return mutate
 
-    def _random_pool(self, reps, nmutants, mutate_prob):
-        indexes = np.fromiter(self._node_indexes, dtype=np.int)
-        nnodes = len(indexes)
-        nparams = len(self.parameters)
-        max_nweights = np.max([np.max(np.diff(indexes)), nparams - indexes[-1]])
-        
-        
-        will_mutate = np.random.rand(reps, nmutants, nnodes) < mutate_prob
-        mutating_nodes = np.sum(will_mutate)
-        node_random = np.random.uniform(-1, 1,
-                                size=(mutating_nodes, max_nweights))
-
-        iter_random = np.random.rand(reps, nmutants)
-
-        return will_mutate,node_random,iter_random
+#==============================================================================
+#     def _random_pool(self, reps, nmutants, mutate_prob):
+#         indexes = np.fromiter(self._node_indexes, dtype=np.int)
+#         nnodes = len(indexes)
+#         nparams = len(self.parameters)
+#         max_nweights = np.max([np.max(np.diff(indexes)), nparams - indexes[-1]])
+#
+#
+#         will_mutate = np.random.rand(reps, nmutants, nnodes) < mutate_prob
+#         mutating_nodes = np.sum(will_mutate)
+#         node_random = np.random.uniform(-1, 1,
+#                                 size=(mutating_nodes, max_nweights))
+#
+#         iter_random = np.random.rand(reps, nmutants)
+#
+#         return will_mutate,node_random,iter_random
+#==============================================================================
 
     @functools.lru_cache()
-    def _get_genetic_fit_function(self, target='chi2_func', 
+    def _get_genetic_fit_function(self, target='chi2_func',
                                   mutate_func='original'):
 
 
@@ -318,48 +321,74 @@ class NeuralNetwork():
         nparams = len(list(self.parameter_symbols))
 
         nnodes = len(list(self._node_indexes))
+        indexes = np.fromiter(self._node_indexes, dtype=np.int)
+
 
 
         @numba.jit(nopython=True)
-        def make_fit(reps, eta, nmutants, mutate_prob, l, cv_l,
-                     params, best_params, best_cv,  mutparams, X, Y, 
+        def _repe_loop(rep, starting_f, starting_cv, mutindex,
+                          eta, nmutants, mutate_prob, l, cv_l,
+                     params, best_params, best_cv,  mutparams, X, Y,
                      covariance, cv_X, cv_Y, cv_cov, chi2, cv_chi2,
                      will_mutate, node_random, iter_random):
+            for mutant in range(nmutants):
+                memcopy(mutparams, params, nparams)
+                for node in range(nnodes):
+                    if will_mutate[mutant,node]:
+                        mutate(mutparams, rep, mutant, node, mutindex, eta,
+                               starting_f, node_random, iter_random)
+                        mutindex += 1
+
+                new_f = func(mutparams, l, X, Y, covariance)
+                new_cv = func(mutparams, cv_l, cv_X, cv_Y, cv_cov)
+
+
+                if new_f < starting_f:
+                    memcopy(best_params, mutparams , nparams)
+                    starting_f = new_f
+                if new_cv < starting_cv:
+                    memcopy(best_cv, mutparams, nparams)
+                    starting_cv = new_cv
+
+                chi2[rep] = starting_f
+                cv_chi2[rep] =  starting_cv
+            memcopy(params, best_params, nparams)
+            return starting_f, starting_cv, mutindex
+
+        #TODO: Make in nonpython mode
+        @numba.jit()
+        def make_fit(reps, eta, nmutants, mutate_prob, l, cv_l,
+                     params, best_params, best_cv,  mutparams, X, Y,
+                     covariance, cv_X, cv_Y, cv_cov, chi2, cv_chi2,
+                     ):
 
             starting_f = func(params, l, X, Y, covariance)
             starting_cv = func(mutparams, cv_l, cv_X, cv_Y, cv_cov)
             memcopy(best_params, params, nparams)
             mutindex = 0
-            for rep in range(reps):
-                for mutant in range(nmutants):
-                    memcopy(mutparams, params, nparams)
-                    for node in range(nnodes):
-                        if will_mutate[rep,mutant,node]:
-                            mutate(mutparams, rep, mutant, node, mutindex, eta,
-                                   starting_f, node_random, iter_random)
-                            mutindex += 1
+            max_nweights = np.max([np.max(np.diff(indexes)), nparams - indexes[-1]])
 
-                    new_f = func(mutparams, l, X, Y, covariance)
-                    new_cv = func(mutparams, cv_l, cv_X, cv_Y, cv_cov)
-                    
-                    
-                    if new_f < starting_f:
-                        memcopy(best_params, mutparams , nparams)
-                        starting_f = new_f
-                    if new_cv < starting_cv:
-                        memcopy(best_cv, mutparams, nparams)
-                        starting_cv = new_cv
-                        
-                    chi2[rep] = starting_f
-                    cv_chi2[rep] =  starting_cv
-                memcopy(params, best_params, nparams)
+
+            will_mutate = np.random.rand(nmutants, nnodes) < mutate_prob
+            mutating_nodes = np.sum(will_mutate)
+            node_random = np.random.uniform(-1, 1,
+                                    size=(mutating_nodes, max_nweights))
+
+            iter_random = np.random.rand(nmutants)
+            for rep in range(reps):
+                 starting_f, starting_cv, mutindex = _repe_loop(
+                               rep, starting_f, starting_cv, mutindex,
+                               eta, nmutants, mutate_prob, l, cv_l,
+                               params, best_params, best_cv,  mutparams, X, Y,
+                               covariance, cv_X, cv_Y, cv_cov, chi2, cv_chi2,
+                               will_mutate, node_random, iter_random)
 
         return make_fit
 
 
     def genetic_fit(self, X, Y, covariance = None, target = 'chi2_func',
                     mutate_func = 'original',
-                    reps = 10000, eta = 15, nmutants = 80, mutate_prob = 0.2, 
+                    reps = 10000, eta = 15, nmutants = 80, mutate_prob = 0.2,
                     prob_testing = 0.3):
 
         if covariance is None:
@@ -378,11 +407,13 @@ class NeuralNetwork():
 
         make_fit = self._get_genetic_fit_function(target,mutate_func)
         ((X, cv_X),(Y,cv_Y), (covariance, cv_cov)) = cv_split(X, Y, covariance,
-                prob_testing = prob_testing)     
-        
+                prob_testing = prob_testing)
+
         l,cv_l = len(X), len(cv_X)
-        will_mutate, node_random, iter_random = self._random_pool(reps,
-                                                        nmutants, mutate_prob)
+#==============================================================================
+#         will_mutate, node_random, iter_random = self._random_pool(reps,
+#                                                         nmutants, mutate_prob)
+#==============================================================================
 
 #==============================================================================
 #         @numba.jit(void(u2,f8,u2,f8,u2,u2,
@@ -391,14 +422,13 @@ class NeuralNetwork():
 #         b1[:,:,:],f8[:,:,:,:],f8[:,:]),
 #         nopython=True)
 #==============================================================================
-        make_fit(reps, eta, nmutants, 
+        make_fit(reps, eta, nmutants,
                  mutate_prob, l, cv_l, params,
                  best_params, best_cv,
-                 mutparams, X, Y, covariance, 
-                 cv_X, cv_Y, cv_cov, 
+                 mutparams, X, Y, covariance,
+                 cv_X, cv_Y, cv_cov,
                  chi2, cv_chi2,
-                 will_mutate, node_random,
-                 iter_random,)
+                 )
 
         self._set_params(best_cv)
         fit_result = {}
