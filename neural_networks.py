@@ -322,15 +322,17 @@ class NeuralNetwork():
 
         nnodes = len(list(self._node_indexes))
         indexes = np.fromiter(self._node_indexes, dtype=np.int)
+        max_nweights = np.max([np.max(np.diff(indexes)), nparams - indexes[-1]])
 
 
 
         @numba.jit(nopython=True)
-        def _repe_loop(rep, starting_f, starting_cv, mutindex,
+        def _repe_loop(rep, starting_f, starting_cv,
                           eta, nmutants, mutate_prob, l, cv_l,
                      params, best_params, best_cv,  mutparams, X, Y,
                      covariance, cv_X, cv_Y, cv_cov, chi2, cv_chi2,
                      will_mutate, node_random, iter_random):
+            mutindex = 0
             for mutant in range(nmutants):
                 memcopy(mutparams, params, nparams)
                 for node in range(nnodes):
@@ -353,7 +355,7 @@ class NeuralNetwork():
                 chi2[rep] = starting_f
                 cv_chi2[rep] =  starting_cv
             memcopy(params, best_params, nparams)
-            return starting_f, starting_cv, mutindex
+            return starting_f, starting_cv
 
         #TODO: Make in nonpython mode
         @numba.jit()
@@ -365,19 +367,16 @@ class NeuralNetwork():
             starting_f = func(params, l, X, Y, covariance)
             starting_cv = func(mutparams, cv_l, cv_X, cv_Y, cv_cov)
             memcopy(best_params, params, nparams)
-            mutindex = 0
-            max_nweights = np.max([np.max(np.diff(indexes)), nparams - indexes[-1]])
-
-
-            will_mutate = np.random.rand(nmutants, nnodes) < mutate_prob
-            mutating_nodes = np.sum(will_mutate)
-            node_random = np.random.uniform(-1, 1,
+            
+            for rep in range(reps):
+                will_mutate = np.random.rand(nmutants, nnodes) < mutate_prob
+                mutating_nodes = np.sum(will_mutate)
+                node_random = np.random.uniform(-1, 1,
                                     size=(mutating_nodes, max_nweights))
 
-            iter_random = np.random.rand(nmutants)
-            for rep in range(reps):
-                 starting_f, starting_cv, mutindex = _repe_loop(
-                               rep, starting_f, starting_cv, mutindex,
+                iter_random = np.random.rand(nmutants)
+                starting_f, starting_cv = _repe_loop(
+                               rep, starting_f, starting_cv,
                                eta, nmutants, mutate_prob, l, cv_l,
                                params, best_params, best_cv,  mutparams, X, Y,
                                covariance, cv_X, cv_Y, cv_cov, chi2, cv_chi2,
