@@ -353,7 +353,7 @@ class NeuralNetwork():
                     starting_cv = new_cv
 
                 chi2[rep] = starting_f
-                cv_chi2[rep] =  starting_cv
+                cv_chi2[rep] =  new_cv
             memcopy(params, best_params, nparams)
             return starting_f, starting_cv
 
