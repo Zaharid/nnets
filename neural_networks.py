@@ -351,9 +351,11 @@ class NeuralNetwork():
                 if new_cv < starting_cv:
                     memcopy(best_cv, mutparams, nparams)
                     starting_cv = new_cv
-
-                chi2[rep] = starting_f
-                cv_chi2[rep] =  new_cv
+            #TODO: Fix mess of chi² reporting
+            chi2[rep] = starting_f
+            #TODO: Understand difference with observed values: 
+            #observed - this ~ -10{² 
+            cv_chi2[rep] =  starting_cv
             memcopy(params, best_params, nparams)
             return starting_f, starting_cv
 
