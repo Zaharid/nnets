@@ -353,8 +353,6 @@ class NeuralNetwork():
                     starting_cv = new_cv
             #TODO: Fix mess of chi² reporting
             chi2[rep] = starting_f
-            #TODO: Understand difference with observed values: 
-            #observed - this ~ -10{² 
             cv_chi2[rep] =  starting_cv
             memcopy(params, best_params, nparams)
             return starting_f, starting_cv
