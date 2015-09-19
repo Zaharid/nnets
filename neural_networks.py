@@ -147,6 +147,7 @@ class NeuralNetwork():
         self._evaluate_sync = True
         self._ev_fs = ev_fs
         return ev_fs
+    
 
     def get_evaluate_function(self):
         """Return only the first function (to avoid typing zero every time)"""
@@ -443,11 +444,11 @@ class NeuralNetwork():
         fit_result['cv_chi2'] = cv_chi2
         return fit_result
 
-    def __call__(self, x):
+    def __call__(self, *x):
         if self.unidimentional_output:
-            return self.get_evaluate_function()(x)
+            return self.get_evaluate_function()(*x)
         else:
-            return [f(x) for f in self.get_evaluate_functions()]
+            return [f(*x) for f in self.get_evaluate_functions()]
 
     @property
     def input_nodes(self):
