@@ -36,11 +36,8 @@ sympy.init_printing()
 simple_net = mlp.build_network(1,2,1)
 simple_net.total_output_formula
 ```
+![Network expression](doc_files/expr.png)
 
-
-
-
-$$- \theta_{20} + \frac{w^{20}_{10}}{e^{\theta_{10} - w^{10}_{00} x_{00}} + 1} + \frac{w^{20}_{11}}{e^{\theta_{11} - w^{11}_{00} x_{00}} + 1}$$
 
 
 
@@ -85,12 +82,7 @@ formula = simple_net.total_output_formula
 formula.diff(next(simple_net.input_symbols))
 ```
 
-
-
-
-$$\frac{w^{10}_{00} w^{20}_{10} e^{\theta_{10} - w^{10}_{00} x_{00}}}{\left(e^{\theta_{10} - w^{10}_{00} x_{00}} + 1\right)^{2}} + \frac{w^{11}_{00} w^{20}_{11} e^{\theta_{11} - w^{11}_{00} x_{00}}}{\left(e^{\theta_{11} - w^{11}_{00} x_{00}} + 1\right)^{2}}$$
-
-
+![Derivative](doc_files/derivative.png)
 
 
 ```python
@@ -118,8 +110,4 @@ n = mlp.build_network(1, layer, output)
 n.total_output_formula
 ```
 
-
-
-
-$$\left(- \theta_{20} - w^{20}_{10} \sin{\left (\theta_{10} - w^{10}_{00} x_{00} \right )} - w^{20}_{11} \sin{\left (\theta_{11} - w^{11}_{00} x_{00} \right )} - w^{20}_{12} \sin{\left (\theta_{12} - w^{12}_{00} x_{00} \right )} - w^{20}_{13} \sin{\left (\theta_{13} - w^{13}_{00} x_{00} \right )} - w^{20}_{14} \sin{\left (\theta_{14} - w^{14}_{00} x_{00} \right )}\right)^{2}$$
-
+![Another Layout](doc_files/otherlayout.png)
