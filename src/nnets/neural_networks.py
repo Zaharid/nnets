@@ -4,7 +4,6 @@ Created on Tue Nov 11 15:44:19 2014
 
 @author: zah
 """
-import functools
 from itertools import chain, repeat
 
 
@@ -39,6 +38,7 @@ class InputNode(Node):
 class NetNode(Node):
     def __init__(self, name, g ,inputs = None, weights = None, theta = 0.):
         self.name = name
+        self.symbol = sympy.Symbol("h_%s" % self.name)
         if inputs is None:
             inputs = []
         self._inputs = inputs
@@ -52,7 +52,7 @@ class NetNode(Node):
     def _init_weights(self, weights = None):
         inputs = self.inputs
         if weights is None:
-            self.weights = np.ones(len(inputs))
+            self.weights = None
         else:
             if len(weights) != len(inputs):
                 raise ValueError("Weights must be the same lenght as inputs")
@@ -84,15 +84,16 @@ class HiddenNode(NetNode):
 class OutputNode(NetNode):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._ymbol = sympy.Symbol('y_%s'%self.name)
+        self.symbol = sympy.Symbol('y_%s'%self.name)
 
 class NeuralNetwork():
 
-    def __init__(self):
-        self._init_parmams()
+    def __init__(self, params = None):
+        self._original_params = params
+        self._set_params(params)
+        #self._init_parmams()
 
     _output_formulas = None
-    _params = None
     _evaluate_sync = True
     _ev_fs = None
 
@@ -122,9 +123,7 @@ class NeuralNetwork():
 
     @property
     def parameter_values(self):
-        for node in chain(self.hidden_nodes, self.output_nodes):
-            yield from node.weights
-            yield node.theta
+        yield from self.parameters
 
     def get_evaluate_functions(self):
         """Return compiled functions with fixed network parameters"""
@@ -147,17 +146,22 @@ class NeuralNetwork():
         self._evaluate_sync = True
         self._ev_fs = ev_fs
         return ev_fs
-    
+
+    @property
+    def nparams(self):
+        return len(list(self.parameter_symbols))
 
     def get_evaluate_function(self):
         """Return only the first function (to avoid typing zero every time)"""
         return self.get_evaluate_functions()[0]
 
     def _get_params(self):
-         for node in chain(self.hidden_nodes, self.output_nodes):
+        if self._params is None:
+            raise RuntimeError("Quering the parameters of an unitialized "
+                               "network")
+        for node in chain(self.hidden_nodes, self.output_nodes):
              yield from node.weights
              yield node.theta
-
 
 
     @property
@@ -169,17 +173,14 @@ class NeuralNetwork():
 
     @property
     def parameters(self):
-        return self._params
+        return self._get_params()
 
-
-    def _init_parmams(self):
-        #Initialize params
-        nparams = len(list(self.parameter_symbols))
-        params = np.random.normal(size=nparams)
+    @parameters.setter
+    def parameters(self, params):
         self._set_params(params)
 
     def reset_params(self):
-        self._init_parmams()
+        self._set_params(self._original_params)
 
     def save_params(self, file):
         np.save(file, self._params)
@@ -191,13 +192,17 @@ class NeuralNetwork():
 
 
     def _set_params(self, params):
-        """Set network parameters where `params` is
-        given in canonical order"""
+        """Set network parameters where `params` are given for each node
+        in the canonical order to be specified by a subclass."""
+        if params is None:
+            self._params = None
+            return
+
         if len(params) != len(list(self.parameter_symbols)):
             raise ValueError("Incompatible parameter specification.")
         i = 0
         for node in chain(self.hidden_nodes, self.output_nodes):
-            l = len(node.weights)
+            l = len(node.inputs)
             node.weights = params[i:i+l]
             node.theta = params[i+l]
             i += l+1
