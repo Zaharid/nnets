@@ -4,26 +4,18 @@ nnets
 Library for creating Neural Networks. A Neural Network can be created
 with any architecture and activation functions. 
 
-The network expression is computed using 
+The network expression is computed symbolically using `sympy` ans
+evaluated efficiently using `numba`. This allows to have the
+advantages of a symbolic expression combined with a fast numerical
+evaluation.
 
+Multilayer perceptrons can be easily created with several helpers.
 
-
-In particul....
-
-
-
-
-```python
-import sys
-```
-
-
-```python
-sys.path.append("src/")
-```
+Examples
+--------
 
 Create a network with one input node one sigmoid hidden layer
-and a linear output layer
+and a linear output layer.
 
 
 ```python
@@ -37,8 +29,6 @@ simple_net = mlp.build_network(1,2,1)
 simple_net.total_output_formula
 ```
 ![Network expression](doc_files/expr.png)
-
-
 
 
 Iterate over the nodes
