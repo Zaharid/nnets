@@ -101,3 +101,12 @@ n.total_output_formula
 ```
 
 ![Another Layout](doc_files/otherlayout.png)
+
+Install
+-------
+
+`nnets` requires `sympy`and `numba`. Once you have installed them, run
+
+```
+setup.py install
+```
